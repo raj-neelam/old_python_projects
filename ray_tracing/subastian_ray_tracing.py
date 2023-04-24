@@ -1,6 +1,6 @@
 import pygame as pg
 import numpy as np
-from math import cos,sin,tan
+from math import cos,sin,tan,cosh
 
 dist = lambda p,q:sum((p-q)**2)**0.5
 mag = lambda v:dist(v,np.zeros(v.size))
@@ -21,7 +21,7 @@ class MainCamera:
         self.x=normalize(np.array([cos(self.a),sin(self.a),0]))
         self.y=normalize(np.array([0,cos(self.b),sin(self.b)]))
         self.z=normalize(np.cross(self.x,self.y))
-    def render(self,pyg):
+    def render(self,pyg, objects):
         planeHeight=self.nearClipPlane*tan(self.field_of_view*0.5*(3.141596/180))*2
         planeWidth =planeHeight*self.aspect_ratio
 
@@ -34,8 +34,13 @@ class MainCamera:
                 pointLocal = bottomLeftLocal + np.array([planeWidth*tx,planeHeight*ty,0])
                 point = self.pos+self.x*pointLocal[0]+self.y*pointLocal[1]+self.z*pointLocal[2]
                 dir = normalize(point-self.pos)
+                col=self.ray_trace(dir,objects)
                 col = np.array([np.dot(dir,np.array([1,0,0])),np.dot(dir,np.array([0,1,0])),np.dot(dir,np.array([0,0,1]))])
                 pg.draw.rect(pyg.window, pyg.clipArray(col*255,0,255),[i*self.side_x,j*self.side_y,self.side_x,self.side_y],0)
+    def ray_trace(self,dir,objects):
+        for object in objects:
+            value = object.intersect(self.pos,dir)
+            return value
     def move(self,pyg):
         if "left" in pyg.buttons:self.a+=0.1
         elif "right" in pyg.buttons:self.a-=0.1
@@ -46,30 +51,6 @@ class MainCamera:
         self.x=normalize(np.array([cos(self.a),sin(self.a),0]))
         self.y=normalize(np.array([0,cos(self.b),sin(self.b)]))
         self.z=normalize(np.cross(self.x,self.y))
-    # def render(self, pyg, objects):
-    #     for y in range(self.resolution[1]):
-    #         for x in range(self.resolution[0]):
-    #             col = self.shoot_ray(x, y, objects)
-    #             pg.draw.rect(pyg.window, pyg.clipArray(col*255,0,255),[x*self.side_x,y*self.side_y,self.side_x,self.side_y],0)
-    # def shoot_ray(self,x,y, objects):
-    #     z=self.z*self.field_of_view
-    #     x=(self.x*(1/self.resolution[0])*(x-(self.resolution[0]/2)))
-    #     y=(self.y*(1/self.resolution[1])*(y-(self.resolution[1]/2)))
-    #     p0=x+y+z
-    #     vec=normalize(p0+self.pos)
-    #     col=self.intersection(vec,objects)
-    #     # return np.array([np.dot(vec,np.array([1,0,0])),np.dot(vec,np.array([0,1,0])),np.dot(vec,np.array([0,0,1]))])
-    #     return col
-    # # def intersection(self,vec,objects):
-    # #     for object in objects:
-    # #         dit=(np.dot(self.pos,vec)**2)-(np.dot(self.pos,self.pos)-(object.radi*object.radi))
-    # #         print(dit)
-    # #         if dit<0:return np.zeros(3)
-    # #         return np.ones(3)
-    # #         # return (dit-np.dot(self.pos,vec))
-    # # def intersection(self,vec,objects):
-    # #     for object in objects:
-    # #         mag(self.pos+(vec*t)-(object.pos-self.pos))=object.radi
                 
 class Object:
     def __init__(self,pos,col,is_light):
@@ -81,6 +62,16 @@ class Sphere(Object):
     def __init__(self,pos,radi,col,is_light=False):
         Object.__init__(self,pos,col,is_light)
         self.radi=radi
+    def intersect(self,pos,dir):
+        r=self.pos-pos
+        rn=normalize(r)
+        dot=dir[0]*rn[0]+dir[1]*rn[1]
+        rm=mag(r)
+        t=cosh(dot/rm)
+        c=((rm**2)-(t**2))**0.5
+        if c<=self.radi:return np.ones(3)
+
+        return np.zeros(3)
 
 class Pyg:
     def __init__(self, x=0,y=0):
@@ -114,10 +105,10 @@ class Pyg:
         return True
 
 pyg=Pyg(600,600)
-camera = MainCamera(pyg,60,60)
+camera = MainCamera(pyg,30,30)
 
-objectsInScene = [Sphere([0,0,50],1,[1,0,0])]
+objectsInScene = [Sphere([0,0,6],5,[1,0,0])]
 
 while pyg.update():
-    camera.render(pyg)
+    camera.render(pyg,objectsInScene)
     camera.move(pyg)
